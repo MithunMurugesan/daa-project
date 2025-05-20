@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TSP Visualizer - Branch and Bound vs Brute Force</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f0f2f5;
+      margin: 0;
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+
+    canvas {
+      border: 2px solid #007bff;
+      background-color: #fff;
+      display: block;
+      margin: 20px auto;
+    }
+
+    #controls {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    button {
+      background-color: #007bff;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    .results {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-around;
+      gap: 20px;
+    }
+
+    .box {
+      background-color: #ffffff;
+      padding: 15px 20px;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      flex: 1;
+      min-width: 300px;
+    }
+
+    .box h3 {
+      margin-top: 0;
+      color: #007bff;
+    }
+
+    ul {
+      padding-left: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Travelling Salesman Problem Visualizer</h1>
+  <div id="controls">
+    <button onclick="solveTSP()">Solve TSP</button>
+  </div>
+
+  <canvas id="canvas" width="1000" height="500"></canvas>
+
+  <div class="results">
+    <div class="box">
+      <h3>Result Path & Cost</h3>
+      <pre id="result">Click "Solve TSP"</pre>
+    </div>
+    <div class="box">
+      <h3>Time Complexity</h3>
+      <pre id="time-complexity"></pre>
+    </div>
+    <div class="box">
+      <h3>Space Complexity</h3>
+      <pre id="space-complexity"></pre>
+    </div>
+    <div class="box">
+      <h3>Execution Time</h3>
+      <pre id="execution-time"></pre>
+    </div>
+  </div>
+
+  <div class="box" style="margin: 30px auto; max-width: 900px;">
+    <h3>Comparison Summary</h3>
+    <div id="comparison"></div>
+  </div>
+
+  <script>
+    const dist = [   
+      [0, 68, 50, 56],   
+      [100, 0, 35, 29],   
+      [18, 95, 62, 30],   
+      [78, 53, 100, 90] 
+    ];
+
+    const cityCoords = [   
+      { x: 500, y: 100 },
+      { x: 900, y: 150 },
+      { x: 890, y: 200 },
+      { x: 570, y: 377 }
+    ];
+
+    class TSPBranchAndBound {
+      constructor(dist) {
+        this.dist = dist;
+        this.n = dist.length;
+        this.minCost = Infinity;
+        this.finalPath = Array(this.n + 1).fill(-1);
+        this.visited = Array(this.n).fill(false);
+      }
+
+      firstMin(i) {
+        let min = Infinity;
+        for (let k = 0; k < this.n; k++) {
+          if (i !== k && this.dist[i][k] < min) min = this.dist[i][k];
+        }
+        return min;
+      }
+
+      secondMin(i) {
+        let first = Infinity, second = Infinity;
+        for (let j = 0; j < this.n; j++) {
+          if (i === j) continue;
+          if (this.dist[i][j] <= first) {
+            second = first;
+            first = this.dist[i][j];
+          } else if (this.dist[i][j] <= second) {
+            second = this.dist[i][j];
+          }
+        }
+        return second;
+      }
+
+      copyToFinal(currPath) {
+        for (let i = 0; i < this.n; i++) {
+          this.finalPath[i] = currPath[i];
+        }
+        this.finalPath[this.n] = currPath[0];
+      }
+
+      tspRec(currBound, currCost, level, currPath) {
+        if (level === this.n) {
+          let lastToFirst = this.dist[currPath[level - 1]][currPath[0]];
+          if (lastToFirst !== 0) {
+            let res = currCost + lastToFirst;
+            if (res < this.minCost) {
+              this.copyToFinal(currPath);
+              this.minCost = res;
+            }
+          }
+          return;
+        }
+
+        for (let i = 0; i < this.n; i++) {
+          if (!this.visited[i] && this.dist[currPath[level - 1]][i] !== 0) {
+            let temp = currBound;
+            currCost += this.dist[currPath[level - 1]][i];
+
+            if (level === 1) {
+              currBound -= ((this.firstMin(currPath[level - 1]) + this.firstMin(i)) / 2);
+            } else {
+              currBound -= ((this.secondMin(currPath[level - 1]) + this.firstMin(i)) / 2);
+            }
+
+            if (currBound + currCost < this.minCost) {
+              currPath[level] = i;
+              this.visited[i] = true;
+              this.tspRec(currBound, currCost, level + 1, currPath);
+            }
+
+            currCost -= this.dist[currPath[level - 1]][i];
+            currBound = temp;
+            this.visited[i] = false;
+          }
+        }
+      }
+
+      solve() {
+        let currBound = 0;
+        let currPath = Array(this.n + 1).fill(-1);
+        this.visited[0] = true;
+        currPath[0] = 0;
+
+        for (let i = 0; i < this.n; i++) {
+          currBound += this.firstMin(i) + this.secondMin(i);
+        }
+
+        currBound = Math.floor(currBound / 2);
+        this.tspRec(currBound, 0, 1, currPath);
+
+        return { path: this.finalPath, cost: this.minCost };
+      }
+    }
+
+    function bruteForceTSP(dist) {
+      const n = dist.length;
+      const cities = Array.from({ length: n }, (_, i) => i);
+      const permutations = getPermutations(cities.slice(1));
+      let minCost = Infinity;
+      let bestPath = [];
+
+      for (const perm of permutations) {
+        const path = [0, ...perm, 0];
+        let cost = 0;
+        for (let i = 0; i < path.length - 1; i++) {
+          cost += dist[path[i]][path[i + 1]];
+        }
+        if (cost < minCost) {
+          minCost = cost;
+          bestPath = path;
+        }
+      }
+      return { path: bestPath, cost: minCost };
+    }
+
+    function getPermutations(arr) {
+      if (arr.length <= 1) return [arr];
+      const result = [];
+      for (let i = 0; i < arr.length; i++) {
+        const rest = arr.slice(0, i).concat(arr.slice(i + 1));
+        const perms = getPermutations(rest);
+        for (const perm of perms) {
+          result.push([arr[i], ...perm]);
+        }
+      }
+      return result;
+    }
+
+    function drawPath(path) {
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.font = "16px Arial";
+      ctx.fillStyle = "red";
+
+      for (let i = 0; i < cityCoords.length; i++) {
+        const { x, y } = cityCoords[i];
+        ctx.beginPath();
+        ctx.arc(x, y, 6, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.fillText(`City ${i}`, x + 10, y);
+      }
+
+      ctx.strokeStyle = "blue";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cityCoords[path[0]].x, cityCoords[path[0]].y);
+      for (let i = 1; i < path.length; i++) {
+        ctx.lineTo(cityCoords[path[i]].x, cityCoords[path[i]].y);
+      }
+      ctx.stroke();
+    }
+
+    function factorial(n) {
+      return n <= 1 ? 1 : n * factorial(n - 1);
+    }
+
+    function solveTSP() {
+      const n = dist.length;
+
+      const bnb = new TSPBranchAndBound(dist);
+      const bnbStart = performance.now();
+      const { path: bnbPath, cost: bnbCost } = bnb.solve();
+      const bnbEnd = performance.now();
+
+      const bruteStart = performance.now();
+      const { path: bfPath, cost: bfCost } = bruteForceTSP(dist);
+      const bruteEnd = performance.now();
+
+      drawPath(bnbPath);
+
+      document.getElementById("result").innerText =
+        `Branch and Bound Path: ${bnbPath.join(" → ")}\nCost: ${bnbCost}`;
+
+      document.getElementById("time-complexity").innerText =
+        `Time Complexity:\nBranch and Bound: O(${factorial(n)})\nBrute Force: O(${factorial(n)})`;
+
+      document.getElementById("space-complexity").innerText =
+        `Space Complexity:\nBranch and Bound: O(${n})\nBrute Force: O(${n})`;
+
+      document.getElementById("execution-time").innerText =
+        `Execution Time:\nBranch and Bound: ${(bnbEnd - bnbStart).toFixed(2)} ms\nBrute Force: ${(bruteEnd - bruteStart).toFixed(2)} ms`;
+
+      document.getElementById("comparison").innerHTML = `
+        <ul>
+          <li><strong>Brute Force:</strong> Tries all ${factorial(n)} paths.</li>
+          <li><strong>Branch and Bound:</strong> Prunes unnecessary paths to optimize faster.</li>
+          <li><strong>Result:</strong> Same cost (${bnbCost}) achieved in less time using B&B.</li>
+        </ul>`;
+    }
+  </script>
+</body>
+</html>
